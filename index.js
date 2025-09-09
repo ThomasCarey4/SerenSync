@@ -13,8 +13,8 @@ module.exports = function (app) {
   /**
    * Plugin metadata
    */
-  plugin.id = 'signalk-data-forwarder';
-  plugin.name = 'Data Forwarder';
+  plugin.id = 'seren-sync';
+  plugin.name = 'Seren Sync';
   plugin.description = 'Forwards SignalK delta data to Unix domain socket with JSON transformation';
 
   /**
