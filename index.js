@@ -1,0 +1,258 @@
+const net = require('net');
+
+module.exports = function (app) {
+  let plugin = {};
+  let deltaStreamUnsubscribe = null;
+  let socketClient = null;
+  let reconnectTimer = null;
+  let isShuttingDown = false;
+  
+  const SOCKET_PATH = '/tmp/signalk.sock';
+  const RECONNECT_INTERVAL = 5000; // 5 seconds
+
+  /**
+   * Plugin metadata
+   */
+  plugin.id = 'signalk-data-forwarder';
+  plugin.name = 'Data Forwarder';
+  plugin.description = 'Forwards SignalK delta data to Unix domain socket with JSON transformation';
+
+  /**
+   * Start the plugin
+   */
+  plugin.start = function (options) {
+    app.debug('Starting SignalK Data Forwarder plugin');
+    
+    // Initialize socket connection
+    connectToSocket();
+    
+    // Subscribe to SignalK delta stream
+    subscribeToDeltas();
+    
+    app.debug('SignalK Data Forwarder plugin started successfully');
+  };
+
+  /**
+   * Stop the plugin
+   */
+  plugin.stop = function () {
+    app.debug('Stopping SignalK Data Forwarder plugin');
+    
+    isShuttingDown = true;
+    
+    // Clear reconnection timer
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    
+    // Unsubscribe from delta stream
+    if (deltaStreamUnsubscribe) {
+      deltaStreamUnsubscribe();
+      deltaStreamUnsubscribe = null;
+      app.debug('Unsubscribed from delta stream');
+    }
+    
+    // Close socket connection
+    if (socketClient) {
+      socketClient.destroy();
+      socketClient = null;
+      app.debug('Socket connection closed');
+    }
+    
+    app.debug('SignalK Data Forwarder plugin stopped');
+  };
+
+  /**
+   * Connect to the Unix domain socket
+   */
+  function connectToSocket() {
+    if (isShuttingDown) return;
+    
+    try {
+      socketClient = new net.Socket();
+      
+      socketClient.on('connect', () => {
+        app.debug('Connected to Unix domain socket at ' + SOCKET_PATH);
+      });
+      
+      socketClient.on('error', (error) => {
+        app.error('Socket connection error:', error.message);
+        scheduleReconnection();
+      });
+      
+      socketClient.on('close', () => {
+        app.debug('Socket connection closed');
+        if (!isShuttingDown) {
+          scheduleReconnection();
+        }
+      });
+      
+      socketClient.connect(SOCKET_PATH);
+      
+    } catch (error) {
+      app.error('Failed to create socket connection:', error.message);
+      scheduleReconnection();
+    }
+  }
+
+  /**
+   * Schedule a reconnection attempt
+   */
+  function scheduleReconnection() {
+    if (isShuttingDown || reconnectTimer) return;
+    
+    app.debug('Scheduling socket reconnection in ' + (RECONNECT_INTERVAL / 1000) + ' seconds');
+    
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (!isShuttingDown) {
+        app.debug('Attempting to reconnect to socket');
+        connectToSocket();
+      }
+    }, RECONNECT_INTERVAL);
+  }
+
+  /**
+   * Subscribe to SignalK delta stream
+   */
+  function subscribeToDeltas() {
+    try {
+      const deltaStream = app.streambundle.getSelfStream('deltas');
+      
+      deltaStreamUnsubscribe = deltaStream.subscribe({
+        next: (delta) => {
+          processDelta(delta);
+        },
+        error: (error) => {
+          app.error('Delta stream error:', error.message);
+        }
+      });
+      
+      app.debug('Successfully subscribed to delta stream');
+      
+    } catch (error) {
+      app.error('Failed to subscribe to delta stream:', error.message);
+    }
+  }
+
+  /**
+   * Process a delta message and transform it
+   * @param {Object} delta - The SignalK delta message
+   */
+  function processDelta(delta) {
+    try {
+      // Validate delta structure
+      if (!delta || !delta.updates || !Array.isArray(delta.updates)) {
+        return;
+      }
+
+      // Process each update in the delta
+      delta.updates.forEach(update => {
+        processUpdate(update);
+      });
+      
+    } catch (error) {
+      app.error('Error processing delta:', error.message);
+    }
+  }
+
+  /**
+   * Process a single update from the delta
+   * @param {Object} update - A single update object from the delta
+   */
+  function processUpdate(update) {
+    try {
+      // Validate update structure
+      if (!update || !update.values || !Array.isArray(update.values)) {
+        return;
+      }
+
+      const timestamp = update.timestamp;
+      const source = extractSourceLabel(update.source);
+
+      // Process each value in the update
+      update.values.forEach(valueObj => {
+        const transformedData = transformValue(valueObj, timestamp, source);
+        if (transformedData) {
+          writeToSocket(transformedData);
+        }
+      });
+      
+    } catch (error) {
+      app.error('Error processing update:', error.message);
+    }
+  }
+
+  /**
+   * Extract the source label from the source object
+   * @param {Object} source - The source object from the update
+   * @returns {string} The source label or 'unknown' if not found
+   */
+  function extractSourceLabel(source) {
+    if (!source) return 'unknown';
+    
+    // Try different possible source formats
+    if (source.label) return source.label;
+    if (source.bus) return source.bus;
+    if (source.type) return source.type;
+    
+    return 'unknown';
+  }
+
+  /**
+   * Transform a value object into the required output format
+   * @param {Object} valueObj - The value object containing path and value
+   * @param {string} timestamp - The timestamp from the update
+   * @param {string} source - The source label
+   * @returns {Object|null} The transformed data object or null if invalid
+   */
+  function transformValue(valueObj, timestamp, source) {
+    try {
+      // Validate value object structure
+      if (!valueObj || !valueObj.path || valueObj.value === undefined) {
+        return null;
+      }
+
+      return {
+        path: valueObj.path,
+        time: timestamp,
+        value: valueObj.value,
+        source: source
+      };
+      
+    } catch (error) {
+      app.error('Error transforming value:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Write transformed data to the Unix domain socket
+   * @param {Object} data - The transformed data object
+   */
+  function writeToSocket(data) {
+    try {
+      // Check if socket is connected
+      if (!socketClient || socketClient.destroyed || !socketClient.writable) {
+        app.debug('Socket not available, skipping data write');
+        return;
+      }
+
+      // Serialize data to JSON string with newline terminator
+      const jsonString = JSON.stringify(data) + '\n';
+      
+      // Write to socket
+      socketClient.write(jsonString, 'utf8', (error) => {
+        if (error) {
+          app.error('Error writing to socket:', error.message);
+        }
+      });
+      
+    } catch (error) {
+      app.error('Error writing to socket:', error.message);
+    }
+  }
+
+  return plugin;
+};
