@@ -68,32 +68,30 @@ module.exports = function (app) {
    */
   function connectToSocket() {
     if (isShuttingDown) return;
-    
-    try {
-      socketClient = new net.Socket();
-      
-      socketClient.on('connect', () => {
-        app.debug('Connected to Unix domain socket at ' + SOCKET_PATH);
-      });
-      
-      socketClient.on('error', (error) => {
-        app.error('Socket connection error:', error.message);
+
+    app.debug('Attempting to connect to socket at', SOCKET_PATH);
+
+    // Use net.createConnection for a more robust connection
+    socketClient = net.createConnection({ path: SOCKET_PATH });
+
+    // 'connect' event is fired on successful connection
+    socketClient.on('connect', () => {
+      app.debug('Successfully connected to Unix domain socket at ' + SOCKET_PATH);
+    });
+
+    // 'error' event handles any connection or stream errors
+    socketClient.on('error', (error) => {
+      app.error('Socket connection error:', error.message);
+      // No need to call scheduleReconnection() here, the 'close' event will handle it.
+    });
+
+    // 'close' event is always fired when a socket is closed, either by error or normally
+    socketClient.on('close', (hadError) => {
+      app.debug(`Socket connection closed. HadError: ${hadError}`);
+      if (!isShuttingDown) {
         scheduleReconnection();
-      });
-      
-      socketClient.on('close', () => {
-        app.debug('Socket connection closed');
-        if (!isShuttingDown) {
-          scheduleReconnection();
-        }
-      });
-      
-      socketClient.connect(SOCKET_PATH);
-      
-    } catch (error) {
-      app.error('Failed to create socket connection:', error.message);
-      scheduleReconnection();
-    }
+      }
+    });
   }
 
   /**
