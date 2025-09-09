@@ -16,6 +16,10 @@ module.exports = function (app) {
   plugin.id = 'seren-sync';
   plugin.name = 'Seren Sync';
   plugin.description = 'Forwards SignalK delta data to Unix domain socket with JSON transformation';
+  plugin.schema = {
+    type: 'object',
+    properties: {}
+  };
 
   /**
    * Start the plugin
