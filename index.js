@@ -133,12 +133,12 @@ module.exports = function (app) {
   // Add this function:
   function processValueObj(valueObj) {
     app.debug('Received value:', JSON.stringify(valueObj));
-    const { path, value, timestamp, source } = valueObj;
+    const { path, value, timestamp, $source } = valueObj;
     const transformedData = {
       path,
       time: timestamp,
       value,
-      source: extractSourceLabel(source)
+      source: $source || 'unknown'
     };
     writeToSocket(transformedData);
   }
