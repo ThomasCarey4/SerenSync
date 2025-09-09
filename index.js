@@ -77,6 +77,7 @@ module.exports = function (app) {
     // 'connect' event is fired on successful connection
     socketClient.on('connect', () => {
       app.debug('Successfully connected to Unix domain socket at ' + SOCKET_PATH);
+      writeToSocket({test: true}); // Add this line for testing
     });
 
     // 'error' event handles any connection or stream errors
@@ -139,6 +140,7 @@ module.exports = function (app) {
    * @param {Object} delta - The SignalK delta message
    */
   function processDelta(delta) {
+    app.debug('Received delta:', JSON.stringify(delta)); // Add this line
     try {
       // Validate delta structure
       if (!delta || !delta.updates || !Array.isArray(delta.updates)) {
@@ -160,6 +162,7 @@ module.exports = function (app) {
    * @param {Object} update - A single update object from the delta
    */
   function processUpdate(update) {
+    app.debug('Processing update:', JSON.stringify(update)); // Add this line
     try {
       // Validate update structure
       if (!update || !update.values || !Array.isArray(update.values)) {
@@ -206,6 +209,7 @@ module.exports = function (app) {
    * @returns {Object|null} The transformed data object or null if invalid
    */
   function transformValue(valueObj, timestamp, source) {
+    app.debug('Transforming value:', JSON.stringify(valueObj)); // Add this line
     try {
       // Validate value object structure
       if (!valueObj || !valueObj.path || valueObj.value === undefined) {
@@ -239,7 +243,8 @@ module.exports = function (app) {
 
       // Serialize data to JSON string with newline terminator
       const jsonString = JSON.stringify(data) + '\n';
-      
+      app.debug('Writing to socket:', jsonString);
+
       // Write to socket
       socketClient.write(jsonString, 'utf8', (error) => {
         if (error) {
