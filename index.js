@@ -122,14 +122,8 @@ module.exports = function (app) {
   function subscribeToDeltas() {
     try {
       const valueStream = app.streambundle.getSelfBus();
-      deltaStreamUnsubscribe = valueStream.subscribe({
-        next: (valueObj) => {
-          processValueObj(valueObj);
-        },
-        error: (error) => {
-          app.error('Value stream error:', error.message);
-        }
-      });
+      valueStream.onValue(processValueObj);
+      deltaStreamUnsubscribe = () => valueStream.offValue(processValueObj);
       app.debug('Successfully subscribed to value stream');
     } catch (error) {
       app.error('Failed to subscribe to value stream:', error.message);
