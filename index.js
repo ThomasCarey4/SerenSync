@@ -121,22 +121,32 @@ module.exports = function (app) {
    */
   function subscribeToDeltas() {
     try {
-      const deltaStream = app.streambundle.getSelfStream('deltas');
-      
-      deltaStreamUnsubscribe = deltaStream.subscribe({
-        next: (delta) => {
-          processDelta(delta);
+      const valueStream = app.streambundle.getSelfBus();
+      deltaStreamUnsubscribe = valueStream.subscribe({
+        next: (valueObj) => {
+          processValueObj(valueObj);
         },
         error: (error) => {
-          app.error('Delta stream error:', error.message);
+          app.error('Value stream error:', error.message);
         }
       });
-      
-      app.debug('Successfully subscribed to delta stream');
-      
+      app.debug('Successfully subscribed to value stream');
     } catch (error) {
-      app.error('Failed to subscribe to delta stream:', error.message);
+      app.error('Failed to subscribe to value stream:', error.message);
     }
+  }
+
+  // Add this function:
+  function processValueObj(valueObj) {
+    app.debug('Received value:', JSON.stringify(valueObj));
+    const { path, value, timestamp, source } = valueObj;
+    const transformedData = {
+      path,
+      time: timestamp,
+      value,
+      source: extractSourceLabel(source)
+    };
+    writeToSocket(transformedData);
   }
 
   /**
@@ -196,12 +206,9 @@ module.exports = function (app) {
    */
   function extractSourceLabel(source) {
     if (!source) return 'unknown';
-    
-    // Try different possible source formats
+    if (source.label && source.src) return `${source.label}.${source.src}`;
     if (source.label) return source.label;
-    if (source.bus) return source.bus;
     if (source.type) return source.type;
-    
     return 'unknown';
   }
 
