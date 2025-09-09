@@ -1,12 +1,12 @@
 {
-  "name": "signalk-data-forwarder",
+  "name": "seren-sync",
   "version": "1.0.0",
   "description": "SignalK plugin that subscribes to delta stream, transforms data, and forwards to Unix domain socket",
   "main": "index.js",
   "keywords": [
     "signalk-node-server-plugin"
   ],
-  "author": "Your Name",
+  "author": "Thomas Carey",
   "license": "MIT",
   "engines": {
     "node": ">=14.0.0"
