@@ -81,7 +81,7 @@ module.exports = function (app) {
     // 'connect' event is fired on successful connection
     socketClient.on('connect', () => {
       app.debug('Successfully connected to Unix domain socket at ' + SOCKET_PATH);
-      writeToSocket({test: true}); // Add this line for testing
+      // writeToSocket({test: true}); // Add this line for testing
     });
 
     // 'error' event handles any connection or stream errors
