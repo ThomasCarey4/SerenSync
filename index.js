@@ -123,7 +123,7 @@ module.exports = function (app) {
     try {
       const valueStream = app.streambundle.getSelfBus();
       valueStream.onValue(processValueObj);
-      deltaStreamUnsubscribe = () => valueStream.offValue(processValueObj);
+      deltaStreamUnsubscribe = () => valueStream.off(processValueObj);
       app.debug('Successfully subscribed to value stream');
     } catch (error) {
       app.error('Failed to subscribe to value stream:', error.message);
