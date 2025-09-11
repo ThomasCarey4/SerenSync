@@ -236,7 +236,7 @@ module.exports = function (app) {
 
       // Check throttling for this specific path
       if (!shouldTransmit(path, category, timestamp)) {
-        app.debug(`Throttled data for path: ${path}`);
+        // app.debug(`Throttled data for path: ${path}`);
         return;
       }
 
