@@ -258,11 +258,20 @@ module.exports = function (app) {
 
       // Extract source information
       const source = valueObj['$source'] || 'unknown';
+      let timestampMs;
+      if (typeof timestamp === 'string') {
+        timestampMs = Math.floor(new Date(timestamp).getTime());
+      } else if (typeof timestamp === 'number') {
+        // Assume it's already in milliseconds if > 1e12, otherwise convert from seconds
+        timestampMs = timestamp > 1e12 ? Math.floor(timestamp) : Math.floor(timestamp * 1000);
+      } else {
+        timestampMs = Date.now(); // Fallback to current time
+      }
 
       // Create measurement data
       const measurementData = {
         path,
-        time: timestamp,
+        time: timestampMs,
         value,
         source
       };
