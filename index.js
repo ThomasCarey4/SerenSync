@@ -234,6 +234,19 @@ module.exports = function (app) {
         return;
       }
 
+      if (
+        category === 'position' &&
+        value &&
+        typeof value === 'object' &&
+        (
+          Number(value.latitude) === 0 ||
+          Number(value.longitude) === 0
+        )
+      ) {
+        app.debug(`Discarding position with zero lat/lon`);
+        return;
+      }
+
       // Check throttling for this specific path
       if (!shouldTransmit(path, category, timestamp)) {
         // app.debug(`Throttled data for path: ${path}`);
